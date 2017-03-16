@@ -125,6 +125,15 @@ void ds_init();
 // reset date/time to 01/01 00:00
 void ds_reset_clock();
 
+// set date/time to:
+// data[0] : year (2-digit)
+// data[1] : mount
+// data[2] : day (1-31)
+// data[3] : hour
+// data[4] : minute
+// data[5] : second
+void ds_set_clock( uint8_t * data );
+
 // toggle 12/24 hour mode
 void ds_hours_12_24_toggle();
     

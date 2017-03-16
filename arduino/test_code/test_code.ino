@@ -55,26 +55,23 @@ void sendBytes( byte * data ) {
 
 int counter =0;
 byte data[SENDDATA_LEN];
+int once = 0;
 
 void loop() {
- 
 
-    counter++;
-    data[0] = counter%10;
-    data[1] = (counter/10)%10;
-    data[2] = (counter/100)%10;
-    data[3] = (counter/1000)%10;
-    
-    if (counter % 2 == 0 ) {
-	data[SENDDATA_LEN-1]=0x11;  // <-- messes up the checksum
-    }   else {
-	data[SENDDATA_LEN-1]=0;	    // checksum will be o.k.
+    while (!once) {
+	data[0] = 17;   // 2017
+	data[1] = 3;    // Mar
+	data[2] = 16;   // 16.
+	data[3] = 20;   // 20h
+	data[4] = 16;   // 16min
+	data[5] = 42;   // 42sec
+	data[6] = 0;    // for checksum
+	sendBytes(data);
+	once =1;
     }
 
-    sendBytes(data);
-    delay(250);
-
-
+       
 
  
 }

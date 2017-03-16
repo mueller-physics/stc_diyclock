@@ -6,7 +6,6 @@
 #include "stc15.h"
 #include <stdint.h>
 #include <stdio.h>
-
 #include "adc.h"
 #include "ds1302.h"
 #include "led.h"
@@ -40,9 +39,6 @@
 #define S2      1
 #define SW1     P3_1
 #define S1      0
-
-
-__sbit __at( 0x8F + 5 ) EX3;
 
 // display mode states
 enum keyboard_mode {
@@ -122,6 +118,9 @@ volatile uint8_t debounce[3];      // switch debounce buffer
 volatile uint8_t switchcount[3];
 #define SW_CNTMAX 80
 
+
+    
+uint8_t clock_is_set = 0;
 
 #define CSBB_SEND_LENGTH 7
 uint8_t csbb_bit_count =0;
@@ -281,8 +280,8 @@ void Timer0Init(void)		//100us @ 11.0592MHz
     TF0 = 0;		//Clear TF0 flag
     TR0 = 1;		//Timer0 start run
     ET0 = 1;        // enable timer0 interrupt
+    EXINT = 0b00100000;   // enable interrupt on port P3_6
     EA = 1;         // global interrupt enable
-    EXINT |= 0b001100000;   // enable interrupt on port P3_6
 }
 
 #define getkeypress(a) a##_PRESSED
@@ -301,9 +300,9 @@ int main()
     P1M0 |= (1<<6) | (1<<7);
             
     // init rtc
-    //ds_init();
+    ds_init();
     // init/read ram config
-    //ds_ram_config_init();
+    ds_ram_config_init();
     
     // uncomment in order to reset minutes and hours to zero.. Should not need this.
     //ds_reset_clock();    
@@ -311,40 +310,20 @@ int main()
     Timer0Init(); // display refresh & switch read
    
 
-    while (1) {
-
-	_delay_ms(20);
-
-	lightval = 3;	
-
-	if (csbb_new_data) {	
-	    clearTmpDisplay();
-	    filldisplay(3, csbb_data_recv[0], 0);
-	    filldisplay(2, csbb_data_recv[1], 0);
-	    filldisplay(1, csbb_data_recv[2], 0);
-	    filldisplay(0, csbb_data_recv[3], 0);
-	    __critical { updateTmpDisplay(); }
-	    csbb_new_data=0;
-	} 
-	if (csbb_recv_failed) {
-	    clearTmpDisplay();
-	    filldisplay(3, 0, 1);
-	    filldisplay(2, 0, 0);
-	    filldisplay(1, 0, 0);
-	    filldisplay(0, 0, 1);
-	    __critical { updateTmpDisplay(); }
-	}
-
-    } 
-
-/*
     // LOOP
     while(1)
     {
 
-      RELAY = 0;
-      _delay_ms(100);
-      RELAY = 1;
+      // check if the clock has been set externally
+      uint8_t i=0;
+      for (i=0; i<10; i++) {
+	if (csbb_new_data) {
+	    ds_set_clock( csbb_data_recv );
+	    clock_is_set = 1;
+	    csbb_new_data = 0;
+	}
+        _delay_ms(10);
+      }
 
       // sample adc, run frequently
       if ((count % 4) == 0) {
@@ -483,9 +462,13 @@ int main()
 		  dotdisplay(1,display_colon);
               } else {
 		  if (!H12_24) { 
-                      filldisplay( 0, (rtc_table[DS_ADDR_HOUR]>>4)&(DS_MASK_HOUR24_TENS>>4), 0);	// tenhour 
+                      filldisplay( 0, (rtc_table[DS_ADDR_HOUR]>>4)&(DS_MASK_HOUR24_TENS>>4), !clock_is_set);	// tenhour 
                   } else {
-                      if (H12_TH) filldisplay( 0, 1, 0);	// tenhour in case AMPM mode is on, then '1' only is H12_TH is on
+                      if (H12_TH) {
+			filldisplay( 0, 1, !clock_is_set);	// tenhour in case AMPM mode is on, then '1' only is H12_TH is on
+		      } else {
+		        filldisplay( 0, LED_BLANK, !clock_is_set); 
+		      }
                   }                  
                   filldisplay( 1, rtc_table[DS_ADDR_HOUR]&DS_MASK_HOUR_UNITS, display_colon);      
               }
@@ -578,7 +561,5 @@ int main()
       count++;
       WDT_CLEAR();
     }
-
-*/
 }
 /* ------------------------------------------------------------------------- */

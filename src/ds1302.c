@@ -139,7 +139,32 @@ void ds_reset_clock() {
     ds_writebyte(DS_ADDR_MONTH, 0x01);
     ds_writebyte(DS_ADDR_DAY,   0x01);
 }
-    
+   
+// set date, time to values
+void ds_set_clock( uint8_t * data ) {
+    uint8_t b;
+    // set seconds
+    b = ds_int2bcd( data[5] );
+    ds_writebyte(DS_ADDR_SECONDS, b);
+    // set minutes
+    b = ds_int2bcd( data[4] );
+    ds_writebyte(DS_ADDR_MINUTES, b);
+    // set hour // TODO: handle AM / PM
+    b = ds_int2bcd( data[3] );
+    ds_writebyte(DS_ADDR_HOUR, b);
+    // set day
+    b = ds_int2bcd( data[2] );
+    ds_writebyte(DS_ADDR_DAY, b);
+    // set mount
+    b = ds_int2bcd( data[1] );
+    ds_writebyte(DS_ADDR_MONTH, b);
+    // set year
+    b = ds_int2bcd( data[0] );
+    ds_writebyte(DS_ADDR_YEAR, b);
+}
+
+
+ 
 void ds_hours_12_24_toggle() {
 
     uint8_t hours,b;
