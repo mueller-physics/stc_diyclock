@@ -7,6 +7,13 @@
 #undef REG8051_H
 #endif
 
+// define register to enable external interrupts 3,4,5
+// (pins P3_6, P3_7)
+__sfr __at (0x8F) EXINT   ;
+
+#define IEX2_VECTOR 10
+#define IEX3_VECTOR 11
+
 /*  P4  */
 __sfr __at (0xC0) P4   ;
 __sbit __at (0xC0) P4_0 ;

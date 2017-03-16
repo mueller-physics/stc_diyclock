@@ -6,6 +6,7 @@
 #include "stc15.h"
 #include <stdint.h>
 #include <stdio.h>
+
 #include "adc.h"
 #include "ds1302.h"
 #include "led.h"
@@ -39,6 +40,9 @@
 #define S2      1
 #define SW1     P3_1
 #define S1      0
+
+
+__sbit __at( 0x8F + 5 ) EX3;
 
 // display mode states
 enum keyboard_mode {
@@ -117,6 +121,58 @@ volatile __bit  S3_PRESSED;
 volatile uint8_t debounce[3];      // switch debounce buffer
 volatile uint8_t switchcount[3];
 #define SW_CNTMAX 80
+
+
+#define SEND_LENGTH 4
+uint8_t bit_count =0;
+uint8_t recvbyte =0;
+uint8_t byte_count=0;
+uint8_t data_recv[8];
+uint8_t is_reset = 1;
+uint8_t new_data = 0;
+
+// routine runs when interrupt received on pin P3.6
+void clockset_bitbanging_isr() __interrupt IEX3_VECTOR 
+{
+    // get the bit
+    uint8_t bit = P3_6;
+    uint8_t i;
+
+    // receiver can be reset by sending a long sequence of 1's
+    if ( is_reset ) {
+	if ( bit ) {
+	    bit_count = 0;
+	} else {
+	    is_reset = 0;
+	}
+    } else {
+	// add bit to the received byte
+	recvbyte |= (bit << bit_count++);
+    }
+
+    // write to data
+    if ( bit_count==8) {
+	data_recv[ byte_count++ ] = recvbyte;
+	recvbyte=0;
+    	bit_count=0;
+    }
+
+    // check if data transmit is complete
+    if ( byte_count == SEND_LENGTH ) {
+
+	// if all bits where one's, ignore the transmission
+	// and go into reset mode
+	is_reset = 1;
+	
+	for ( i=0; i<SEND_LENGTH; i++) {
+	    is_reset &= ( data_recv[i] & 0xFF );
+	}
+
+	new_data = !is_reset;
+	byte_count=0;
+    }
+
+}
 
 void timer0_isr() __interrupt 1 __using 1
 {
@@ -209,6 +265,7 @@ void Timer0Init(void)		//100us @ 11.0592MHz
     TR0 = 1;		//Timer0 start run
     ET0 = 1;        // enable timer0 interrupt
     EA = 1;         // global interrupt enable
+    EXINT |= 0b001100000;   // enable interrupt on port P3_6
 }
 
 #define getkeypress(a) a##_PRESSED
@@ -227,15 +284,35 @@ int main()
     P1M0 |= (1<<6) | (1<<7);
             
     // init rtc
-    ds_init();
+    //ds_init();
     // init/read ram config
-    ds_ram_config_init();
+    //ds_ram_config_init();
     
     // uncomment in order to reset minutes and hours to zero.. Should not need this.
     //ds_reset_clock();    
     
     Timer0Init(); // display refresh & switch read
-    
+   
+
+    while (1) {
+
+	_delay_ms(20);
+
+	lightval = 3;	
+
+	if (new_data) {	
+	    clearTmpDisplay();
+	    filldisplay(3, data_recv[0], 0);
+	    filldisplay(2, data_recv[1], 0);
+	    filldisplay(1, data_recv[2], 0);
+	    filldisplay(0, data_recv[3], 0);
+	    __critical { updateTmpDisplay(); }
+	    new_data=0;
+	}
+
+    } 
+
+/*
     // LOOP
     while(1)
     {
@@ -476,5 +553,7 @@ int main()
       count++;
       WDT_CLEAR();
     }
+
+*/
 }
 /* ------------------------------------------------------------------------- */
