@@ -123,13 +123,14 @@ volatile uint8_t switchcount[3];
 #define SW_CNTMAX 80
 
 
-#define SEND_LENGTH 4
-uint8_t bit_count =0;
-uint8_t recvbyte =0;
-uint8_t byte_count=0;
-uint8_t data_recv[8];
-uint8_t is_reset = 1;
-uint8_t new_data = 0;
+#define CSBB_SEND_LENGTH 7
+uint8_t csbb_bit_count =0;
+uint8_t csbb_recvbyte =0;
+uint8_t csbb_byte_count=0;
+uint8_t csbb_data_recv[CSBB_SEND_LENGTH];
+uint8_t csbb_is_reset = 1;
+uint8_t csbb_new_data = 0;
+uint8_t csbb_recv_failed = 0;
 
 // routine runs when interrupt received on pin P3.6
 void clockset_bitbanging_isr() __interrupt IEX3_VECTOR 
@@ -139,38 +140,54 @@ void clockset_bitbanging_isr() __interrupt IEX3_VECTOR
     uint8_t i;
 
     // receiver can be reset by sending a long sequence of 1's
-    if ( is_reset ) {
+    if ( csbb_is_reset ) {
 	if ( bit ) {
-	    bit_count = 0;
+	    csbb_bit_count = 0;
 	} else {
-	    is_reset = 0;
+	    csbb_is_reset = 0;
 	}
     } else {
 	// add bit to the received byte
-	recvbyte |= (bit << bit_count++);
+	csbb_recvbyte |= (bit << csbb_bit_count++);
     }
 
-    // write to data
-    if ( bit_count==8) {
-	data_recv[ byte_count++ ] = recvbyte;
-	recvbyte=0;
-    	bit_count=0;
+    // when byte complete, write to data
+    if ( csbb_bit_count==8) {
+	csbb_data_recv[ csbb_byte_count++ ] = csbb_recvbyte;
+	csbb_recvbyte=0;
+    	csbb_bit_count=0;
     }
 
     // check if data transmit is complete
-    if ( byte_count == SEND_LENGTH ) {
+    if ( csbb_byte_count == CSBB_SEND_LENGTH ) {
 
 	// if all bits where one's, ignore the transmission
 	// and go into reset mode
-	is_reset = 1;
+	csbb_is_reset = 1;
 	
-	for ( i=0; i<SEND_LENGTH; i++) {
-	    is_reset &= ( data_recv[i] & 0xFF );
+	for ( i=0; i<CSBB_SEND_LENGTH; i++) {
+	    csbb_is_reset &= ( csbb_data_recv[i] & 0xFF );
 	}
 
-	new_data = !is_reset;
-	byte_count=0;
+	csbb_new_data = !csbb_is_reset;
+	csbb_byte_count=0;
     }
+
+    // simple XOR crosscheck in last byte
+    if ( csbb_new_data ) {
+	uint8_t xordata = 0;	
+	for ( i=0; i<CSBB_SEND_LENGTH-1; i++) {
+	    xordata ^= csbb_data_recv[i];
+	}
+	// check if the last by contains the XOR of all send bytes
+	if ( xordata != csbb_data_recv[CSBB_SEND_LENGTH-1] ) {
+	    csbb_new_data =0;
+	    csbb_recv_failed = 1;
+	} else {
+	    csbb_recv_failed = 0;
+	}
+    }
+
 
 }
 
@@ -300,14 +317,22 @@ int main()
 
 	lightval = 3;	
 
-	if (new_data) {	
+	if (csbb_new_data) {	
 	    clearTmpDisplay();
-	    filldisplay(3, data_recv[0], 0);
-	    filldisplay(2, data_recv[1], 0);
-	    filldisplay(1, data_recv[2], 0);
-	    filldisplay(0, data_recv[3], 0);
+	    filldisplay(3, csbb_data_recv[0], 0);
+	    filldisplay(2, csbb_data_recv[1], 0);
+	    filldisplay(1, csbb_data_recv[2], 0);
+	    filldisplay(0, csbb_data_recv[3], 0);
 	    __critical { updateTmpDisplay(); }
-	    new_data=0;
+	    csbb_new_data=0;
+	} 
+	if (csbb_recv_failed) {
+	    clearTmpDisplay();
+	    filldisplay(3, 0, 1);
+	    filldisplay(2, 0, 0);
+	    filldisplay(1, 0, 0);
+	    filldisplay(0, 0, 1);
+	    __critical { updateTmpDisplay(); }
 	}
 
     } 
